@@ -19,7 +19,7 @@ pub fn main() !void {
     });
     defer server.deinit();
 
-    std.debug.print("Chat server started on 127.0.0.1:8080\n", .{});
+    std.debug.print("TCPSYS server started on 127.0.0.1:8080\n", .{});
 
     while (true) {
         const conn = try server.accept();

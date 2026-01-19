@@ -31,7 +31,6 @@ pub fn main() !void {
     var stdin_writer = std.fs.File.stdin().reader(&stdin_buf);
     const stdin = &stdin_writer.interface;
 
-    // var buf: [1024]u8 = undefined;
     while (true) {
         std.debug.print("{s}> ", .{username});
 
