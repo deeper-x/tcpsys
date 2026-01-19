@@ -1,6 +1,6 @@
 const std = @import("std");
 const net = std.net;
-const posix = std.posix;
+// const posix = std.posix;
 
 const Client = struct {
     stream: net.Stream,
