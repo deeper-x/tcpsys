@@ -1,0 +1,4 @@
+.zig-cache/
+client/.zig-cache/
+server/.zig-cache/
+*.o

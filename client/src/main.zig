@@ -28,46 +28,32 @@ pub fn main() !void {
     recv_thread.detach();
 
     var stdin_buf: [1024]u8 = undefined;
-    var stdout_buf: [1024]u8 = undefined;
 
-    var stdin_writer = std.fs.File.stdout().reader(&stdin_buf);
-    var stdout_writer = std.fs.File.stdout().writer(&stdout_buf);
-
+    var stdin_writer = std.fs.File.stdin().reader(&stdin_buf);
     const stdin = &stdin_writer.interface;
-    const stdout = &stdout_writer.interface;
 
     // var buf: [1024]u8 = undefined;
     while (true) {
-        try stdout.print("> ", .{});
+        std.debug.print("{s}> ", .{username});
 
-        while (stdin.takeDelimiterExclusive('\n')) |line| {
+        while (stdin.takeDelimiter('\n') catch null) |line| {
             if (line.len == 0) continue;
             _ = stream.write(line) catch break;
             _ = stream.write("\n") catch break;
-        } else |err| switch (err) {
-            error.EndOfStream, // stream ended not on a line break
-            error.StreamTooLong, // line could not fit in buffer
-            error.ReadFailed, // caller can check reader implementation for diagnostics
-            => |e| return e,
+        } else {
+            break;
         }
     }
-
-    try stdout.flush();
 }
 
 fn receiveMessages(stream: net.Stream) !void {
-    var stdoud_buf: [1024]u8 = undefined;
-    var stdout_writer = std.fs.File.stdout().writer(&stdoud_buf);
-    const stdout = &stdout_writer.interface;
-
     var buf: [1024]u8 = undefined;
 
     while (true) {
         const n = stream.read(&buf) catch break;
         if (n == 0) break;
 
-        try stdout.print("\r{s}> ", .{buf[0..n]});
+        // Print received message on new line
+        std.debug.print("\r{s}", .{buf[0..n]});
     }
-
-    try stdout.flush();
 }

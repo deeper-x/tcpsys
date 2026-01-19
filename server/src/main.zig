@@ -48,9 +48,10 @@ fn handleClient(stream: net.Stream, allocator: std.mem.Allocator) !void {
     const client_idx = clients.items.len - 1;
     clients_mutex.unlock();
 
-    std.debug.print("User '{s}' connected\n", .{username});
+    std.debug.print("{s} connected\n", .{username});
 
-    const join_msg = try std.fmt.allocPrint(allocator, "SERVER> {s} joined the chat\n", .{username});
+    // Notify all other clients
+    const join_msg = try std.fmt.allocPrint(allocator, "{s} connected\n", .{username});
     defer allocator.free(join_msg);
     broadcast(join_msg, client_idx);
 
@@ -59,19 +60,24 @@ fn handleClient(stream: net.Stream, allocator: std.mem.Allocator) !void {
         const msg_len = stream.read(&msg_buf) catch break;
         if (msg_len == 0) break;
 
-        const message = try std.fmt.allocPrint(allocator, "{s}> {s}", .{ username, msg_buf[0..msg_len] });
+        const message = try std.fmt.allocPrint(allocator, "Message from {s}: {s}", .{ username, msg_buf[0..msg_len] });
         defer allocator.free(message);
 
-        std.debug.print("{s}", .{message});
         broadcast(message, client_idx);
     }
 
     clients_mutex.lock();
     _ = clients.orderedRemove(client_idx);
     clients_mutex.unlock();
-    allocator.free(username);
 
-    std.debug.print("User '{s}' disconnected\n", .{username});
+    std.debug.print("{s} disconnected\n", .{username});
+
+    // Notify remaining clients
+    const leave_msg = try std.fmt.allocPrint(allocator, "{s} disconnected\n", .{username});
+    defer allocator.free(leave_msg);
+    broadcastToAll(leave_msg);
+
+    allocator.free(username);
 }
 
 fn broadcast(message: []const u8, sender_idx: usize) void {
@@ -80,6 +86,15 @@ fn broadcast(message: []const u8, sender_idx: usize) void {
 
     for (clients.items, 0..) |client, i| {
         if (i == sender_idx) continue;
+        _ = client.stream.write(message) catch continue;
+    }
+}
+
+fn broadcastToAll(message: []const u8) void {
+    clients_mutex.lock();
+    defer clients_mutex.unlock();
+
+    for (clients.items) |client| {
         _ = client.stream.write(message) catch continue;
     }
 }
