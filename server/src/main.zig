@@ -2,9 +2,9 @@ const std = @import("std");
 const net = std.net;
 
 const Client = struct {
+    allocator: std.mem.Allocator,
     stream: net.Stream,
     username: []const u8,
-    allocator: std.mem.Allocator,
 };
 
 var clients: std.ArrayList(Client) = .empty;
@@ -23,12 +23,12 @@ pub fn main() !void {
 
     while (true) {
         const conn = try server.accept();
-        const thread = try std.Thread.spawn(.{}, handleClient, .{ conn.stream, allocator });
+        const thread = try std.Thread.spawn(.{}, handleClient, .{ allocator, conn.stream });
         thread.detach();
     }
 }
 
-fn handleClient(stream: net.Stream, allocator: std.mem.Allocator) !void {
+fn handleClient(allocator: std.mem.Allocator, stream: net.Stream) !void {
     defer stream.close();
 
     var read_buffer: [256]u8 = undefined;
@@ -39,9 +39,9 @@ fn handleClient(stream: net.Stream, allocator: std.mem.Allocator) !void {
 
     clients_mutex.lock();
     try clients.append(allocator, .{
+        .allocator = allocator,
         .stream = stream,
         .username = username,
-        .allocator = allocator,
     });
 
     const client_idx = clients.items.len - 1;
@@ -52,17 +52,17 @@ fn handleClient(stream: net.Stream, allocator: std.mem.Allocator) !void {
     // Notify all other clients
     const join_msg = try std.fmt.allocPrint(allocator, "{s} connected\n", .{username});
     defer allocator.free(join_msg);
-    broadcast(join_msg, client_idx);
+    send(join_msg, client_idx);
 
     while (true) {
         var msg_buf: [1024]u8 = undefined;
-        const msg_len = stream.read(&msg_buf) catch break;
-        if (msg_len == 0) break;
+        var msg_reader = stream.reader(&msg_buf);
+        var msg_stdin = &msg_reader.file_reader.interface;
 
-        const message = try std.fmt.allocPrint(allocator, "Message from {s}: {s}", .{ username, msg_buf[0..msg_len] });
-        defer allocator.free(message);
+        const message = try msg_stdin.takeDelimiter('\n') orelse break;
 
-        broadcast(message, client_idx);
+        const prompt = try std.fmt.allocPrint(allocator, "{s} says: {s}", .{ username, message });
+        send(prompt, client_idx);
     }
 
     clients_mutex.lock();
@@ -74,26 +74,22 @@ fn handleClient(stream: net.Stream, allocator: std.mem.Allocator) !void {
     // Notify remaining clients
     const leave_msg = try std.fmt.allocPrint(allocator, "{s} disconnected\n", .{username});
     defer allocator.free(leave_msg);
-    broadcastToAll(leave_msg);
+    send(leave_msg, null);
 
     allocator.free(username);
 }
 
-fn broadcast(message: []const u8, sender_idx: usize) void {
+fn send(message: []const u8, client_idx: ?usize) void {
     clients_mutex.lock();
     defer clients_mutex.unlock();
 
     for (clients.items, 0..) |client, i| {
-        if (i == sender_idx) continue;
-        _ = client.stream.write(message) catch continue;
-    }
-}
+        // if client_idx is not set, it means is a broadcast message
+        if (client_idx) |actual_id| {
+            if (i == actual_id) continue;
+        }
 
-fn broadcastToAll(message: []const u8) void {
-    clients_mutex.lock();
-    defer clients_mutex.unlock();
-
-    for (clients.items) |client| {
         _ = client.stream.write(message) catch continue;
+        _ = client.stream.write("\n") catch continue;
     }
 }
