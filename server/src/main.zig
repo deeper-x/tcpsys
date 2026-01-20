@@ -77,8 +77,6 @@ fn handleClient(allocator: std.mem.Allocator, stream: net.Stream) !void {
 
     // send message broadcast, client_idx is null
     send(leave_msg, null);
-
-    // allocator.free(username);
 }
 
 fn send(message: []const u8, client_idx: ?usize) void {
