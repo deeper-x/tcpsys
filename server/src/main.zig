@@ -3,7 +3,7 @@ const net = std.net;
 
 const Client = struct {
     stream: net.Stream,
-    username: []u8,
+    username: []const u8,
     allocator: std.mem.Allocator,
 };
 
@@ -31,11 +31,11 @@ pub fn main() !void {
 fn handleClient(stream: net.Stream, allocator: std.mem.Allocator) !void {
     defer stream.close();
 
-    var buf: [256]u8 = undefined;
-    const n = try stream.read(&buf);
-    if (n == 0) return;
+    var read_buffer: [256]u8 = undefined;
+    var reader = stream.reader(&read_buffer);
+    var stdin = &reader.file_reader.interface;
 
-    const username = try allocator.dupe(u8, buf[0..n]);
+    const username = try stdin.takeDelimiter('#') orelse "anonymous";
 
     clients_mutex.lock();
     try clients.append(allocator, .{

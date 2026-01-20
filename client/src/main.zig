@@ -15,13 +15,19 @@ pub fn main() !void {
         return;
     };
 
+    const username_delimit = try std.fmt.allocPrint(allocator, "{s}#", .{username});
+
     const address = try net.Address.parseIp("127.0.0.1", 8080);
     const stream = try net.tcpConnectToAddress(address);
     defer stream.close();
 
-    _ = try stream.write(username);
+    var write_buf: [1024]u8 = undefined;
+    var writer = stream.writer(&write_buf);
+
+    _ = try writer.interface.writeAll(username_delimit);
 
     std.debug.print("Connected as '{s}'. Type your messages:\n", .{username});
+    try writer.interface.flush();
 
     const recv_thread = try std.Thread.spawn(.{}, receiveMessages, .{stream});
     recv_thread.detach();
