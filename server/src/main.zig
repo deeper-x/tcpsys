@@ -74,9 +74,11 @@ fn handleClient(allocator: std.mem.Allocator, stream: net.Stream) !void {
     // Notify remaining clients
     const leave_msg = try std.fmt.allocPrint(allocator, "{s} disconnected\n", .{username});
     defer allocator.free(leave_msg);
+
+    // send message broadcast, client_idx is null
     send(leave_msg, null);
 
-    allocator.free(username);
+    // allocator.free(username);
 }
 
 fn send(message: []const u8, client_idx: ?usize) void {
@@ -84,7 +86,7 @@ fn send(message: []const u8, client_idx: ?usize) void {
     defer clients_mutex.unlock();
 
     for (clients.items, 0..) |client, i| {
-        // if client_idx is not set, it means is a broadcast message
+        // if client_idx is not set, it means it is a broadcast message
         if (client_idx) |actual_id| {
             if (i == actual_id) continue;
         }
