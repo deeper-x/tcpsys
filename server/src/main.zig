@@ -1,5 +1,6 @@
 const std = @import("std");
 const net = std.net;
+const testing = std.testing;
 
 /// Connected client data: allocator, stream, and username
 const Client = struct {
@@ -38,16 +39,27 @@ pub fn main() !void {
     }
 }
 
+/// Reads username from stream until '#' delimiter. Returns "anonymous" if empty.
+/// Username stored in caller-provided buffer and valid while buffer is in scope.
+fn read_username(stream: net.Stream, buffer: []u8) ![]const u8 {
+    var read_buffer: [256]u8 = undefined;
+    var reader = stream.reader(&read_buffer);
+    var stdin = &reader.file_reader.interface;
+    const username = try stdin.takeDelimiter('#') orelse "anonymous";
+
+    @memcpy(buffer[0..username.len], username);
+    return buffer[0..username.len];
+}
+
+// username is valid as long as username_buffer is in scope
+
 /// Handles a client connection lifecycle: join, message relay, and disconnect.
 /// Thread-safe. Runs in dedicated thread per client.
 fn handleClient(allocator: std.mem.Allocator, stream: net.Stream) !void {
     defer stream.close(); // Always close connection on exit
 
-    // Read username from initial handshake (terminated by '#')
     var read_buffer: [256]u8 = undefined;
-    var reader = stream.reader(&read_buffer);
-    var stdin = &reader.file_reader.interface;
-    const username = try stdin.takeDelimiter('#') orelse "anonymous";
+    const username = try read_username(stream, &read_buffer);
 
     // Add client to shared list (thread-safe)
     clients_mutex.lock();
